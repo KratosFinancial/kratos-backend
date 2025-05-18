@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stripe Payment Test with Elements</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 400px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background: #f9f9f9;
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    form {
+      background: #fff;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+
+    #card-element {
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: white;
+      box-sizing: border-box;
+      transition: border-color 0.3s ease;
+    }
+
+    #card-element.StripeElement--focus {
+      border-color: #6a0dad;
+      box-shadow: 0 0 5px rgba(106, 13, 173, 0.5);
+    }
+
+    #card-errors {
+      color: #d9534f;
+      margin-bottom: 12px;
+      min-height: 18px;
+      font-size: 14px;
+    }
+
+    button {
+      background-color: #6a0dad;
+      color: white;
+      border: none;
+      padding: 12px 0;
+      width: 100%;
+      font-size: 18px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    button:hover:not(:disabled) {
+      background-color: #580baf;
+    }
+
+    button:disabled {
+      background-color: #aaa;
+      cursor: not-allowed;
+    }
+
+    /* Spinner for loading state */
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      animation: spin 1s linear infinite;
+      margin-left: 8px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #payment-message {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #28a745;
+      display: none;
+    }
+  
+    #onboardBtn {
+      margin-top: 20px;
+      background-color: #5469d4;
+      color: white;
+      border: none;
+      padding: 12px 0;
+      width: 100%;
+      font-size: 18px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    #onboardBtn:hover {
+      background-color: #4353b3;
+    }
+        #checkStatusBtn {
+      margin-top: 10px;
+      background-color: #333;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    #checkStatusBtn:hover {
+      background-color: #222;
+    }
+    </style>
+</head>
+<body>
+  <h1>Kratos Payment Test with Stripe Elements</h1>
+  <form id="payment-form">
+    <div id="card-element"></div>
+    <div id="card-errors" role="alert"></div>
+    <button type="submit" id="payBtn">
+      Pay $10.00
+      <div class="spinner" id="spinner" style="display:none;"></div>
+    </button>
+  </form>
+    <button id="onboardBtn">Start Stripe Onboarding</button>
+        <div id="account-id-display" style="margin-top: 20px; font-size: 14px; text-align: center; color: #333;"></div>
+                <div id="dashboard" style="margin-top: 30px; display: none;">
+          <h2 style="text-align: center;">Account Dashboard</h2>
+          <p style="text-align: center;">Connected Account ID: <span id="dashboard-account-id"></span></p>
+          <div style="text-align: center;">
+            <button id="checkStatusBtn">Check Account Status</button>
+          </div>
+          <div id="account-status" style="margin-top: 10px; text-align: center;"></div>
+        </div>
+        <div id="payment-message"></div>
+
+  <script>
+    const stripe = Stripe('pk_test_51RN0dUCBHfa9VMlP5m9d2WbbWIaS8Gk8d4Dj4ZTOZkYm3BLYMoLCcXgeWCIiWYjcL3NqPnHXYlRyBKET0Dx88Hnl00CK70WT8S');
+    const elements = stripe.elements();
+    const card = elements.create('card');
+    card.mount('#card-element');
+
+    const form = document.getElementById('payment-form');
+    const payBtn = document.getElementById('payBtn');
+    const spinner = document.getElementById('spinner');
+    const cardErrors = document.getElementById('card-errors');
+    const paymentMessage = document.getElementById('payment-message');
+
+    card.on('change', (event) => {
+      cardErrors.textContent = event.error ? event.error.message : '';
+      paymentMessage.style.display = 'none';
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      // Disable button and show spinner
+      payBtn.disabled = true;
+      spinner.style.display = 'inline-block';
+      cardErrors.textContent = '';
+      paymentMessage.style.display = 'none';
+
+      try {
+        // Create payment intent
+        const response = await fetch('/stripe/create-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: 1000, currency: 'usd' }),
+        });
+        const { clientSecret } = await response.json();
+
+        // Confirm card payment
+        const result = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: { card: card }
+        });
+
+        if (result.error) {
+          cardErrors.textContent = result.error.message;
+        } else if (result.paymentIntent && result.paymentIntent.status === 'succeeded') {
+          paymentMessage.textContent = 'Payment succeeded! Thank you.';
+          paymentMessage.style.display = 'block';
+          form.reset();
+          card.clear();
+        }
+      } catch (error) {
+        cardErrors.textContent = 'Payment failed: ' + error.message;
+      } finally {
+        payBtn.disabled = false;
+        spinner.style.display = 'none';
+      }
+    });
+  
+    document.getElementById('onboardBtn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/stripe/create-connected-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.url) {
+localStorage.setItem('connected_account_id', data.accountId); // store ID
+document.getElementById('account-id-display').textContent = 'Connected Account ID: ' + data.accountId;
+            window.location.href = data.url;
+        } else {
+          alert('Failed to create connected account.');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    });
+    
+    const savedAccountId = localStorage.getItem('connected_account_id');
+    if (savedAccountId) {
+      document.getElementById('account-id-display').textContent = 'Connected Account ID: ' + savedAccountId;
+        }
+
+    // Dashboard functionality
+    const dashboard = document.getElementById('dashboard');
+    const dashboardAccountId = document.getElementById('dashboard-account-id');
+    const accountStatus = document.getElementById('account-status');
+
+    if (savedAccountId) {
+      dashboard.style.display = 'block';
+      dashboardAccountId.textContent = savedAccountId;
+    }
+
+    document.getElementById('checkStatusBtn').addEventListener('click', async () => {
+      try {
+        const response = await fetch(`/stripe/account-status/${savedAccountId}`);
+        const data = await response.json();
+        accountStatus.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        accountStatus.textContent = 'Error fetching account status: ' + error.message;
+      }
+    });    
+    <div id="admin-panel" style="margin-top: 40px;">
+  <h2 style="text-align: center;">All Connected Accounts</h2>
+  <ul id="accounts-list" style="list-style-type: none; padding: 0;"></ul>
+</div>
+    </script>
+</body>
+</html>    
+<body>
+  <!-- your HTML content -->
+
+  <ul id="accounts-list"></ul>
+
+  <script>
+    // Existing scripts like Stripe setup, event listeners...
+
+    async function loadAccounts() {
+      try {
+        const response = await fetch('/stripe/accounts');
+        const data = await response.json();
+
+        const list = document.getElementById('accounts-list');
+        list.innerHTML = '';
+
+        data.forEach(account => {
+          const item = document.createElement('li');
+          item.style.margin = '8px 0';
+          item.innerHTML = `
+            <strong>${account.accountId}</strong> – Created: ${new Date(account.createdAt).toLocaleString()}
+            <a href="https://dashboard.stripe.com/test/connect/accounts/${account.accountId}" target="_blank" style="margin-left: 10px; font-size: 14px;">View</a>
+          `;
+          list.appendChild(item);
+        });
+      } catch (error) {
+        console.error('Error loading accounts:', error);
+      }
+    }
+
+    loadAccounts();
+  </script>
+</body>
+</html>
